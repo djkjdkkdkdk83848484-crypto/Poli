@@ -1,35 +1,35 @@
-// server.js — минимальный WebSocket-сервер для игры
-const { WebSocketServer } = require('ws');
-const http = require('http');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
-// Layero передаёт порт через переменную окружения PORT
-const PORT = process.env.PORT || 3000;
+const app = express();
+const httpServer = createServer(app);
 
-// Создаём HTTP-сервер (нужен как основа для WebSocket)
-const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('Game server is running');
+// Настраиваем Socket.IO. origin: '*' разрешает подключение с любого сайта (для тестов).
+const io = new Server(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-const wss = new WebSocketServer({ server });
+// Проверка, что сервер жив (Railway использует это для мониторинга)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', connections: io.engine.clientsCount });
+});
 
-wss.on('connection', (ws) => {
-  console.log('Игрок подключился');
-  
-  ws.on('message', (data) => {
-    // Простейшая логика: пересылаем сообщение всем остальным
-    // В реальной игре здесь будет ваша игровая логика
-    for (const client of wss.clients) {
-      if (client !== ws && client.readyState === client.OPEN) {
-        client.send(data);
-      }
-    }
+io.on('connection', (socket) => {
+  console.log('Игрок подключился:', socket.id);
+
+  // Когда игрок присылает сообщение (движение, действие), пересылаем его ВСЕМ ОСТАЛЬНЫМ
+  socket.on('game-message', (data) => {
+    socket.broadcast.emit('game-message', data);
   });
-  
-  ws.on('close', () => console.log('Игрок отключился'));
+
+  socket.on('disconnect', () => {
+    console.log('Игрок отключился:', socket.id);
+  });
 });
 
-// ВАЖНО: слушаем 0.0.0.0, а не 127.0.0.1
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
+// Railway сам подставит порт в переменную PORT. Слушаем 0.0.0.0 (обязательно!)
+const port = process.env.PORT || 3000;
+httpServer.listen(port, '0.0.0.0', () => {
+  console.log(`Сервер запущен на порту ${port}`);
 });
