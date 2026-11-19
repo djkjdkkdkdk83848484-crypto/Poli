@@ -1,39 +1,35 @@
+// server.js — минимальный WebSocket-сервер для игры
 const { WebSocketServer } = require('ws');
+const http = require('http');
 
-const port = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port });
+// Layero передаёт порт через переменную окружения PORT
+const PORT = process.env.PORT || 3000;
 
-const clients = [];
-
-wss.on('connection', ws => {
-  clients.push(ws);
-  ws.isHost = (clients.length === 1);
-  broadcastRoles();
-
-  ws.on('message', raw => {
-    clients.forEach(c => {
-      if (c !== ws && c.readyState === 1) c.send(raw);
-    });
-  });
-
-  ws.on('close', () => {
-    const i = clients.indexOf(ws);
-    if (i >= 0) clients.splice(i, 1);
-    if (clients.length > 0) clients[0].isHost = true;
-    broadcastRoles();
-  });
+// Создаём HTTP-сервер (нужен как основа для WebSocket)
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Game server is running');
 });
 
-function broadcastRoles() {
-  clients.forEach(c => {
-    if (c.readyState === 1) {
-      c.send(JSON.stringify({
-        type: 'role',
-        host: !!c.isHost,
-        players: clients.length
-      }));
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  console.log('Игрок подключился');
+  
+  ws.on('message', (data) => {
+    // Простейшая логика: пересылаем сообщение всем остальным
+    // В реальной игре здесь будет ваша игровая логика
+    for (const client of wss.clients) {
+      if (client !== ws && client.readyState === client.OPEN) {
+        client.send(data);
+      }
     }
   });
-}
+  
+  ws.on('close', () => console.log('Игрок отключился'));
+});
 
-console.log('WebSocket server running on port ' + port);
+// ВАЖНО: слушаем 0.0.0.0, а не 127.0.0.1
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
+});
