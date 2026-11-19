@@ -1,5 +1,0 @@
-{
-  "framework": "generic",
-  "runtime": "node",
-  "startCommand": "node server.js"
-}
